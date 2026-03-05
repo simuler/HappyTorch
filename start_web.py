@@ -1,0 +1,57 @@
+#!/usr/bin/env python
+"""Start TorchCodeV2 web server."""
+
+import os
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent))
+
+def check_dependencies():
+    """Check if required dependencies are installed."""
+    missing = []
+    try:
+        import fastapi
+    except ImportError:
+        missing.append("fastapi")
+    
+    try:
+        import uvicorn
+    except ImportError:
+        missing.append("uvicorn")
+    
+    try:
+        import torch
+    except ImportError:
+        missing.append("torch")
+    
+    return missing
+
+if __name__ == "__main__":
+    print("\n" + "=" * 50)
+    print("🔥 TorchCodeV2 Web Server")
+    print("=" * 50)
+    
+    # Check dependencies
+    missing = check_dependencies()
+    if missing:
+        print(f"\n❌ Missing dependencies: {', '.join(missing)}")
+        print("\nPlease install them with:")
+        print(f"  pip install {' '.join(missing)}")
+        sys.exit(1)
+    
+    # Import after dependency check
+    import uvicorn
+    from web.app import app
+    
+    print("\n  🌐 Open http://localhost:8000 in your browser")
+    print("  ⏹️  Press Ctrl+C to stop\n")
+    print("=" * 50 + "\n")
+    
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=8000,
+        log_level="info"
+    )

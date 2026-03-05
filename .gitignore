@@ -6,3 +6,5 @@ data/progress.json
 data/*.db
 .DS_Store
 notebooks/
+.codebuddy
+CODEBUDDY.md

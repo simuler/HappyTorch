@@ -45,6 +45,7 @@ TorchCodeV2 gives you a **structured practice environment** with:
 | 💡 | **Hints when stuck** | Nudges without full spoilers |
 | 📖 | **Reference solutions** | Study optimal implementations after your attempt |
 | 📊 | **Progress tracking** | What you've solved, best times, and attempt counts |
+| 🌐 | **Web interface** | LeetCode-like UI with Monaco editor, random/sequential mode |
 
 ---
 
@@ -104,6 +105,69 @@ jupyter lab --notebook-dir=notebooks --NotebookApp.token=''
 ```
 
 Then open **http://localhost:8888** in your browser.
+
+---
+
+## 🌐 Web Mode (LeetCode-like Interface)
+
+TorchCodeV2 now offers a web-based practice interface similar to LeetCode!
+
+### Features
+
+- **Monaco Editor** — VS Code's editor with Python syntax highlighting
+- **Random Mode** — Get random unsolved problems
+- **Sequential Mode** — Work through problems in order
+- **Instant Testing** — Run tests with one click (Ctrl+Enter)
+- **Progress Dashboard** — Track your solved/attempted/todo status
+- **Dark Theme** — Modern, eye-friendly interface
+
+### Installation
+
+```bash
+# Install additional web dependencies
+pip install fastapi uvicorn python-multipart
+```
+
+### Launch
+
+```bash
+# Start the web server
+python start_web.py
+```
+
+Then open **http://localhost:8000** in your browser.
+
+### Screenshots
+
+The web interface includes:
+- **Sidebar** — Filterable problem list with difficulty badges and status
+- **Code Editor** — Write your implementation with syntax highlighting
+- **Description Panel** — View problem details and hints
+- **Results Panel** — See test results with pass/fail status and timing
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# 1. Create and activate environment
+conda create -n torchcode python=3.11 -y
+conda activate torchcode
+
+# 2. Install dependencies
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install jupyterlab numpy
+pip install -e .
+
+# 3a. Launch Web Mode (recommended for beginners)
+pip install fastapi uvicorn python-multipart
+python start_web.py
+# Open http://localhost:8000
+
+# 3b. Or launch Jupyter Mode (for more flexibility)
+python start_jupyter.py
+# Open http://localhost:8888
+```
 
 ---
 
@@ -227,11 +291,19 @@ TorchCodeV2/
 │       ├── lora.py        # ✨ New in V2
 │       └── ...            # 24 tasks total
 │
+├── web/                   # 🌐 Web interface (FastAPI + Monaco Editor)
+│   ├── app.py             # FastAPI backend, REST API for tasks/submit/progress
+│   ├── requirements.txt   # Web-specific dependencies
+│   └── static/
+│       └── index.html     # Single-page app with Monaco code editor
+│
 ├── templates/             # Blank notebooks for practice
 ├── solutions/             # Reference implementations
 ├── notebooks/             # User workspace (create this directory)
 ├── data/                  # Progress tracking (auto-created)
 │
+├── start_web.py           # Launch web server
+├── start_jupyter.py       # Launch JupyterLab
 ├── setup.py               # Package installation
 ├── CODEBUDDY.md           # Guidance for AI coding assistants
 └── README.md              # This file

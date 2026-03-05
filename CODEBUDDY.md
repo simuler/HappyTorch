@@ -10,11 +10,19 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install jupyterlab numpy
 pip install -e .
 
-# Prepare notebooks
+# Install web dependencies (for web mode)
+pip install fastapi uvicorn python-multipart
+
+# Prepare notebooks (for Jupyter mode)
 mkdir -p notebooks && cp -r templates/* notebooks/ && cp -r solutions/* notebooks/
 
-# Start JupyterLab
-jupyter lab --notebook-dir=notebooks --NotebookApp.token=''
+# Start Web Mode (LeetCode-like interface)
+python start_web.py
+# Open http://localhost:8000
+
+# Start Jupyter Mode (traditional notebooks)
+python start_jupyter.py
+# OR: jupyter lab --notebook-dir=notebooks --NotebookApp.token=''
 ```
 
 Python 3.10+ required. PyTorch CPU-only, no GPU needed.
@@ -35,6 +43,12 @@ torch_judge/           # Auto-grading engine (pip install -e .)
 └── tasks/             # Task definitions (auto-discovered)
     ├── _registry.py   # Auto-imports all TASK dicts from sibling modules
     └── *.py           # 24 tasks total (see categories below)
+
+web/                   # Web interface (FastAPI + Monaco Editor)
+├── app.py             # FastAPI backend, REST API for tasks/submit/progress
+├── requirements.txt   # Web-specific dependencies
+└── static/
+    └── index.html     # Single-page app with Monaco code editor
 ```
 
 ### Workflow
