@@ -1,4 +1,5 @@
 # 🔥 HappyTorch
+**🚀 News: The plugin [happytorch-plugin](https://github.com/Rivflyyy/happytorch-plugin) has been released.**
 
 **A PyTorch coding practice platform — covering LLM, Diffusion, PEFT, and more**
 
