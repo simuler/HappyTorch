@@ -456,6 +456,58 @@
             margin-bottom: 8px;
         }
 
+        /* Solution Panel */
+        .solution-code-section {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-top: 16px;
+            overflow: hidden;
+        }
+
+        .solution-code-header {
+            padding: 10px 16px;
+            background: rgba(88, 166, 255, 0.1);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .solution-code-header .btn-copy {
+            margin-left: auto;
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .solution-code-header .btn-copy:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .solution-code-block {
+            padding: 16px;
+            margin: 0;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            white-space: pre;
+        }
+
         /* Results Panel */
         .results-panel {
             background: var(--bg-secondary);
@@ -810,6 +862,7 @@
                 <div class="problem-tabs">
                     <button class="tab-btn active" data-tab="code">代码</button>
                     <button class="tab-btn" data-tab="description">题目描述</button>
+                    <button class="tab-btn" data-tab="solution" id="solutionTabBtn" style="display: none;">题解</button>
                 </div>
 
                 <div class="editor-container" id="codeTab">
@@ -837,6 +890,22 @@
                             <i class="ri-lightbulb-line"></i> 提示
                         </div>
                         <div id="hintContent"></div>
+                    </div>
+                </div>
+
+                <div class="description-panel" id="solutionTab" style="display: none;">
+                    <div id="solutionLoading" style="color: var(--text-secondary); padding: 20px;">加载题解中...</div>
+                    <div id="solutionContent" style="display: none;">
+                        <div id="solutionMarkdown"></div>
+                        <div class="solution-code-section">
+                            <div class="solution-code-header">
+                                <i class="ri-code-s-slash-line"></i> 参考实现
+                                <button class="btn-copy" onclick="copySolutionCode()" title="复制代码">
+                                    <i class="ri-file-copy-line"></i>
+                                </button>
+                            </div>
+                            <pre class="solution-code-block"><code id="solutionCode"></code></pre>
+                        </div>
                     </div>
                 </div>
 
@@ -1104,6 +1173,14 @@
             }
             document.getElementById('hintContent').textContent = task.hint;
 
+            // Show/hide solution tab
+            const solutionTabBtn = document.getElementById('solutionTabBtn');
+            solutionTabBtn.style.display = task.has_solution ? 'block' : 'none';
+            currentTask._solutionLoaded = false;
+            document.getElementById('solutionLoading').textContent = '加载题解中...';
+            document.getElementById('solutionLoading').style.display = 'block';
+            document.getElementById('solutionContent').style.display = 'none';
+
             // Reset tabs
             switchTab('code');
 
@@ -1126,6 +1203,63 @@
             });
             document.getElementById('codeTab').style.display = tab === 'code' ? 'flex' : 'none';
             document.getElementById('descriptionTab').style.display = tab === 'description' ? 'block' : 'none';
+            document.getElementById('solutionTab').style.display = tab === 'solution' ? 'block' : 'none';
+
+            // Lazy-load solution on first tab switch
+            if (tab === 'solution' && currentTask && !currentTask._solutionLoaded) {
+                loadSolution(currentTask.id);
+            }
+        }
+
+        async function loadSolution(taskId) {
+            const loading = document.getElementById('solutionLoading');
+            const content = document.getElementById('solutionContent');
+            loading.style.display = 'block';
+            content.style.display = 'none';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/tasks/${taskId}/solution`);
+                if (!res.ok) {
+                    loading.textContent = '暂无题解';
+                    return;
+                }
+                const data = await res.json();
+
+                // Render markdown explanation
+                const mdEl = document.getElementById('solutionMarkdown');
+                if (data.markdown) {
+                    mdEl.innerHTML = marked.parse(data.markdown);
+                    renderMathInElement(mdEl, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false}
+                        ],
+                        throwOnError: false
+                    });
+                } else {
+                    mdEl.innerHTML = '';
+                }
+
+                // Set code
+                document.getElementById('solutionCode').textContent = data.code || '# No solution code';
+
+                loading.style.display = 'none';
+                content.style.display = 'block';
+
+                if (currentTask) currentTask._solutionLoaded = true;
+            } catch (e) {
+                console.error('Failed to load solution:', e);
+                loading.textContent = '加载题解失败';
+            }
+        }
+
+        function copySolutionCode() {
+            const code = document.getElementById('solutionCode').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showToast('代码已复制', 'success');
+            }).catch(() => {
+                showToast('复制失败', 'error');
+            });
         }
 
         function showResults(result) {

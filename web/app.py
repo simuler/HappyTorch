@@ -86,30 +86,42 @@ class ProgressResponse(BaseModel):
 
 # ==================== Helper Functions ====================
 
-def _find_template_path(task_id: str) -> Path | None:
-    """Find template notebook path by task_id.
-    
-    Template files are named like '01_relu.ipynb', task_id is 'relu'.
+def _find_notebook_path(task_id: str, directory: str, suffix: str = "") -> Path | None:
+    """Find notebook path by task_id in a given directory.
+
+    Template files: '01_relu.ipynb', Solution files: '01_relu_solution.ipynb'.
     """
-    templates_dir = Path(__file__).parent.parent / "templates"
-    
+    base_dir = Path(__file__).parent.parent / directory
+    if not base_dir.exists():
+        return None
+
     # Try exact match first
-    exact = templates_dir / f"{task_id}.ipynb"
+    exact = base_dir / f"{task_id}{suffix}.ipynb"
     if exact.exists():
         return exact
-    
-    # Try with number prefix (e.g., 01_relu.ipynb)
-    for f in templates_dir.glob("*.ipynb"):
-        # Match patterns like "01_relu.ipynb" where task_id is "relu"
-        name = f.stem  # "01_relu"
-        if name.endswith(f"_{task_id}") or name == task_id:
+
+    # Try with number prefix (e.g., 01_relu.ipynb or 01_relu_solution.ipynb)
+    for f in base_dir.glob(f"*{suffix}.ipynb"):
+        name = f.stem  # "01_relu" or "01_relu_solution"
+        # Remove suffix to get base name
+        base = name.removesuffix(suffix) if suffix else name
+        if base.endswith(f"_{task_id}") or base == task_id:
             return f
-        # Also try matching the task_id directly in the name
-        parts = name.split("_", 1)
+        parts = base.split("_", 1)
         if len(parts) == 2 and parts[1] == task_id:
             return f
-    
+
     return None
+
+
+def _find_template_path(task_id: str) -> Path | None:
+    """Find template notebook path by task_id."""
+    return _find_notebook_path(task_id, "templates")
+
+
+def _find_solution_path(task_id: str) -> Path | None:
+    """Find solution notebook path by task_id."""
+    return _find_notebook_path(task_id, "solutions", "_solution")
 
 
 def _get_task_description(task_id: str) -> str:
@@ -241,6 +253,44 @@ def _get_template_code(task_id: str) -> tuple[str, str, str]:
     return template_code, signature, example
 
 
+def _get_solution(task_id: str) -> dict[str, str] | None:
+    """Extract solution content from solution notebook.
+
+    Returns dict with 'code' (solution code) and 'markdown' (explanation)
+    or None if no solution notebook exists.
+    """
+    solution_path = _find_solution_path(task_id)
+    if not solution_path or not solution_path.exists():
+        return None
+
+    try:
+        with open(solution_path, encoding="utf-8") as f:
+            nb = json.load(f)
+    except Exception:
+        return None
+
+    markdown_parts: list[str] = []
+    code_parts: list[str] = []
+
+    for cell in nb.get("cells", []):
+        source = "".join(cell.get("source", []))
+        if not source.strip():
+            continue
+        if cell.get("cell_type") == "markdown":
+            markdown_parts.append(source.strip())
+        elif cell.get("cell_type") == "code":
+            # Skip judge-related cells (import torch_judge / check() calls)
+            stripped = source.strip()
+            if "from torch_judge" in stripped or "torch_judge.check" in stripped:
+                continue
+            code_parts.append(stripped)
+
+    return {
+        "markdown": "\n\n".join(markdown_parts),
+        "code": "\n\n".join(code_parts),
+    }
+
+
 def _run_tests(task_id: str, code: str) -> tuple[int, int, float, list[dict], str]:
     """Execute user code and run tests. Returns (passed, total, time, results, output)."""
     task = get_task(task_id)
@@ -368,6 +418,25 @@ async def get_task_detail(task_id: str):
         "signature": signature,
         "example": example,
         "tests_count": len(task["tests"]),
+        "has_solution": _find_solution_path(task_id) is not None,
+    }
+
+
+@app.get("/api/tasks/{task_id}/solution")
+async def get_task_solution(task_id: str):
+    """Get solution for a specific task."""
+    task = get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    solution = _get_solution(task_id)
+    if not solution:
+        raise HTTPException(status_code=404, detail="Solution not available")
+
+    return {
+        "id": task_id,
+        "markdown": solution["markdown"],
+        "code": solution["code"],
     }
 
 

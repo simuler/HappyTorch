@@ -82,6 +82,7 @@ A LeetCode-like practice interface with:
 - **Monaco Editor** — VS Code's editor with Python syntax highlighting
 - **Random / Sequential Mode** — Get random unsolved problems or work through them in order
 - **Instant Testing** — Run tests with one click (`Ctrl+Enter`)
+- **Solution Tab** — View reference solutions with markdown explanation and copyable code
 - **Progress Dashboard** — Track solved / attempted / todo status
 - **Dark Theme** — Modern, eye-friendly interface
 
