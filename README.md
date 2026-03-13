@@ -78,8 +78,9 @@ make stop               # stop container
 # Jupyter Mode
 make jupyter            # build & start → http://localhost:8888
 
-# Or pull the pre-built image directly
-docker compose up -d    # pulls ghcr.io/chan/happytorch:latest
+# Or use the pre-built image directly (no build needed)
+docker compose up -d                        # Web UI → http://localhost:8000
+MODE=jupyter docker compose up -d           # Jupyter → http://localhost:8888
 ```
 
 Progress data (`data/progress.json`) is persisted via Docker volume.

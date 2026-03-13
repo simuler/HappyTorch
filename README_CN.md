@@ -78,8 +78,9 @@ make stop               # 停止容器
 # Jupyter 模式
 make jupyter            # 构建并启动 → http://localhost:8888
 
-# 或直接拉取预构建镜像
-docker compose up -d    # 拉取 ghcr.io/chan/happytorch:latest
+# 或直接使用预构建镜像（无需本地构建）
+docker compose up -d                        # Web 界面 → http://localhost:8000
+MODE=jupyter docker compose up -d           # Jupyter → http://localhost:8888
 ```
 
 做题进度（`data/progress.json`）通过 Docker volume 持久化保存。

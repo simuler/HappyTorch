@@ -1,6 +1,6 @@
 services:
   happytorch:
-    image: ghcr.io/chan/happytorch:latest
+    image: ghcr.io/rivflyyy/happytorch:latest
     build: .
     ports:
       - "8000:8000"

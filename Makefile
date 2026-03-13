@@ -1,6 +1,6 @@
 COMPOSE := $(shell command -v podman >/dev/null 2>&1 && echo "podman compose" || echo "docker compose")
 
-IMAGE := ghcr.io/chan/happytorch
+IMAGE := ghcr.io/rivflyyy/happytorch
 
 .PHONY: run stop clean jupyter push
 
