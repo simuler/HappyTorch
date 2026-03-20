@@ -15,6 +15,7 @@ const state = {
     autosaveTimer: null,
     suppressEditorEvents: false,
     collapsedCategories: new Set(),
+    pendingAuthContext: null,
 };
 
 const ui = {
@@ -206,8 +207,133 @@ function getTaskProgress(taskId) {
     );
 }
 
+function bindAuthCtas(root) {
+    root.querySelectorAll("[data-open-auth]").forEach((button) => {
+        button.addEventListener("click", () => openAuthModal(button.dataset.openAuth || "login"));
+    });
+}
+
+function snapshotPendingAuthContext(taskIdOverride = state.currentTask?.id || null) {
+    state.pendingAuthContext = {
+        taskId: taskIdOverride,
+        editorCode: state.editor ? state.editor.getValue() : "",
+    };
+}
+
+function renderWorkspaceState() {
+    const hasTask = Boolean(state.currentTask);
+    ui.emptyState.classList.toggle("hidden", hasTask);
+    ui.problemView.classList.toggle("hidden", !hasTask);
+
+    if (hasTask) {
+        return;
+    }
+
+    if (state.auth.authenticated) {
+        ui.emptyState.innerHTML = `
+            <i class="ri-layout-masonry-line"></i>
+            <div class="empty-state-copy">
+                <h2>Select a task</h2>
+                <p>Choose a problem from the sidebar or use Random to reopen your account-backed workspace.</p>
+            </div>
+        `;
+        return;
+    }
+
+    ui.emptyState.innerHTML = `
+        <i class="ri-door-lock-box-line"></i>
+        <div class="empty-state-copy">
+            <h2>Register or sign in to start practicing</h2>
+            <p>This server only exposes problems, solutions, drafts, and submissions to authenticated users.</p>
+        </div>
+        <div class="empty-state-actions">
+            <button class="primary-btn" type="button" data-open-auth="register">
+                <i class="ri-user-add-line"></i>
+                <span>Create Account</span>
+            </button>
+            <button class="ghost-btn" type="button" data-open-auth="login">
+                <i class="ri-login-box-line"></i>
+                <span>Sign In</span>
+            </button>
+        </div>
+    `;
+    bindAuthCtas(ui.emptyState);
+}
+
+function applySignedOutState({
+    preservePendingAuth = false,
+    openAuth = false,
+    authMode = "login",
+    toastMessage = "",
+} = {}) {
+    clearTimeout(state.autosaveTimer);
+    if (preservePendingAuth) {
+        snapshotPendingAuthContext();
+    } else {
+        state.pendingAuthContext = null;
+    }
+
+    state.auth = {
+        authenticated: false,
+        user: null,
+        current_task_id: null,
+    };
+    state.tasks = [];
+    state.progress = {};
+    state.currentTask = null;
+
+    hideResults();
+    hideSolutionPanel();
+    setEditorValue(DEFAULT_EDITOR_TEXT);
+    ui.solvedCount.textContent = "0";
+    ui.totalCount.textContent = "0";
+    renderAuthControls();
+    renderTaskList();
+    renderWorkspaceState();
+    updateSaveStatus("Register or sign in to start practicing", "warning");
+
+    if (toastMessage) {
+        showToast(toastMessage, "warning", 3600);
+    }
+    if (openAuth) {
+        openAuthModal(authMode);
+    }
+}
+
+function handleAuthError(error, options = {}) {
+    if (error.status !== 401) {
+        return false;
+    }
+
+    applySignedOutState({
+        preservePendingAuth: options.preservePendingAuth ?? true,
+        openAuth: true,
+        authMode: options.authMode || "login",
+        toastMessage: options.toastMessage || error.message || "Please sign in to continue.",
+    });
+    return true;
+}
+
+async function loadProtectedData() {
+    try {
+        await Promise.all([loadTasks(), loadProgress()]);
+        return true;
+    } catch (error) {
+        if (handleAuthError(error, { preservePendingAuth: false, authMode: "login" })) {
+            return false;
+        }
+        throw error;
+    }
+}
+
 function renderAuthControls() {
     ui.guestNotice.classList.toggle("hidden", state.auth.authenticated);
+    document.querySelectorAll(".filter-btn").forEach((button) => {
+        button.disabled = !state.auth.authenticated;
+    });
+    ui.randomBtn.innerHTML = state.auth.authenticated
+        ? '<i class="ri-shuffle-line"></i><span>Random</span>'
+        : '<i class="ri-login-box-line"></i><span>Sign In to Start</span>';
 
     if (state.auth.authenticated) {
         ui.authControls.innerHTML = `
@@ -241,6 +367,28 @@ function renderAuthControls() {
 }
 
 function renderTaskList() {
+    if (!state.auth.authenticated) {
+        ui.taskList.innerHTML = `
+            <div class="task-gate-card">
+                <div class="section-label">Account Required</div>
+                <h3>Unlock the problem set</h3>
+                <p>Register or sign in before you browse tasks, reveal solutions, save drafts, or submit code on this server.</p>
+                <div class="task-gate-actions">
+                    <button class="primary-btn" type="button" data-open-auth="register">
+                        <i class="ri-user-add-line"></i>
+                        <span>Create Account</span>
+                    </button>
+                    <button class="ghost-btn" type="button" data-open-auth="login">
+                        <i class="ri-login-box-line"></i>
+                        <span>Sign In</span>
+                    </button>
+                </div>
+            </div>
+        `;
+        bindAuthCtas(ui.taskList);
+        return;
+    }
+
     const activeFilter = document.querySelector(".filter-btn.active")?.dataset.filter || "all";
     const filteredTasks = state.tasks.filter((task) => {
         if (activeFilter === "all") {
@@ -340,6 +488,8 @@ async function loadSession() {
     const data = await apiFetch("/api/auth/me");
     state.auth = data;
     renderAuthControls();
+    renderTaskList();
+    renderWorkspaceState();
 }
 
 async function loadTasks() {
@@ -381,8 +531,7 @@ function selectTask(task) {
     };
     state.auth.current_task_id = task.id;
 
-    ui.emptyState.classList.add("hidden");
-    ui.problemView.classList.remove("hidden");
+    renderWorkspaceState();
     renderAuthControls();
 
     ui.problemTitle.textContent = task.title;
@@ -427,19 +576,36 @@ function selectTask(task) {
 }
 
 async function loadTask(taskId) {
+    if (!state.auth.authenticated) {
+        snapshotPendingAuthContext(taskId);
+        openAuthModal("login");
+        return;
+    }
+
     try {
         const task = await apiFetch(`/api/tasks/${taskId}`);
         selectTask(task);
     } catch (error) {
+        if (handleAuthError(error, { preservePendingAuth: true, authMode: "login" })) {
+            return;
+        }
         showToast(error.message || "Failed to load task.", "error");
     }
 }
 
 async function getRandomTask() {
+    if (!state.auth.authenticated) {
+        openAuthModal("register");
+        return;
+    }
+
     try {
         const task = await apiFetch("/api/random");
         await loadTask(task.id);
     } catch (error) {
+        if (handleAuthError(error, { preservePendingAuth: false, authMode: "login" })) {
+            return;
+        }
         showToast(error.message || "Failed to pick a random task.", "error");
     }
 }
@@ -449,7 +615,7 @@ function handleEditorChange() {
         return;
     }
     if (!state.auth.authenticated) {
-        updateSaveStatus("Local only | sign in to save", "warning");
+        updateSaveStatus("Register or sign in to start practicing", "warning");
         return;
     }
 
@@ -486,19 +652,13 @@ async function saveWorkspace(codeOverride = null, { quiet = true } = {}) {
         renderTaskList();
         return true;
     } catch (error) {
-        if (error.status === 401) {
-            state.auth = {
-                authenticated: false,
-                user: null,
-                current_task_id: null,
-            };
-            renderAuthControls();
-            updateSaveStatus("Session expired | sign in again", "warning");
-        } else {
-            updateSaveStatus("Save failed", "error");
-            if (!quiet) {
-                showToast(error.message || "Autosave failed.", "error");
-            }
+        if (handleAuthError(error, { preservePendingAuth: true, authMode: "login" })) {
+            return false;
+        }
+
+        updateSaveStatus("Save failed", "error");
+        if (!quiet) {
+            showToast(error.message || "Autosave failed.", "error");
         }
         return false;
     }
@@ -523,18 +683,17 @@ async function submitCode() {
         });
 
         showResults(result);
-        if (state.auth.authenticated) {
-            await loadProgress();
-            updateSaveStatus("Saved with latest run", "success");
-        } else if (!result.persisted) {
-            updateSaveStatus("Run finished | sign in to persist", "warning");
-        }
+        await loadProgress();
+        updateSaveStatus("Saved with latest run", "success");
 
         showToast(
             result.success ? "All tests passed." : `${result.passed}/${result.total} tests passed.`,
             result.success ? "success" : "warning",
         );
     } catch (error) {
+        if (handleAuthError(error, { preservePendingAuth: true, authMode: "login" })) {
+            return;
+        }
         showToast(error.message || "Submit failed.", "error");
     } finally {
         ui.runBtn.disabled = false;
@@ -632,6 +791,10 @@ async function loadSolution(taskId) {
         ui.solutionCode.textContent = state.currentTask.solutionCode;
         ui.solutionContent.classList.remove("hidden");
     } catch (error) {
+        if (handleAuthError(error, { preservePendingAuth: true, authMode: "login" })) {
+            hideSolutionPanel();
+            return;
+        }
         ui.solutionEmpty.classList.remove("hidden");
         ui.solutionEmpty.innerHTML = `
             <i class="ri-error-warning-line"></i>
@@ -655,17 +818,27 @@ function showProgressModal() {
     if (!state.auth.authenticated) {
         ui.progressContent.innerHTML = `
             <p style="margin-bottom: 16px; color: var(--text-secondary);">
-                Sign in or register before you start solving so the server can persist drafts, solved status, and your last opened problem.
+                This server keeps the full practice workflow behind an account. Sign in or register to unlock tasks, drafts, and progress sync.
             </p>
-            <button class="primary-btn" id="progressAuthBtn" type="button">
-                <i class="ri-user-add-line"></i>
-                <span>Create Account</span>
-            </button>
+            <div class="task-gate-actions">
+                <button class="primary-btn" id="progressRegisterBtn" type="button">
+                    <i class="ri-user-add-line"></i>
+                    <span>Create Account</span>
+                </button>
+                <button class="ghost-btn" id="progressLoginBtn" type="button">
+                    <i class="ri-login-box-line"></i>
+                    <span>Sign In</span>
+                </button>
+            </div>
         `;
         ui.progressModal.classList.add("show");
-        document.getElementById("progressAuthBtn").addEventListener("click", () => {
+        document.getElementById("progressRegisterBtn").addEventListener("click", () => {
             ui.progressModal.classList.remove("show");
             openAuthModal("register");
+        });
+        document.getElementById("progressLoginBtn").addEventListener("click", () => {
+            ui.progressModal.classList.remove("show");
+            openAuthModal("login");
         });
         return;
     }
@@ -763,6 +936,10 @@ async function resetProgress() {
         }
         showToast("Account progress reset.", "success");
     } catch (error) {
+        if (handleAuthError(error, { preservePendingAuth: true, authMode: "login" })) {
+            ui.progressModal.classList.remove("show");
+            return;
+        }
         showToast(error.message || "Failed to reset progress.", "error");
     }
 }
@@ -787,8 +964,10 @@ async function handleAuthSubmit(event) {
 
     const username = ui.authUsername.value.trim();
     const password = ui.authPassword.value;
-    const currentEditorCode = state.editor ? state.editor.getValue() : "";
-    const currentTaskId = state.currentTask?.id || null;
+    const resumeContext = state.pendingAuthContext || {
+        taskId: state.currentTask?.id || null,
+        editorCode: state.editor ? state.editor.getValue() : "",
+    };
 
     try {
         const data = await apiFetch(`/api/auth/${state.authMode}`, {
@@ -799,14 +978,21 @@ async function handleAuthSubmit(event) {
         state.auth = data;
         renderAuthControls();
         closeAuthModal();
-        await loadProgress();
+        const loaded = await loadProtectedData();
+        if (!loaded) {
+            return;
+        }
+        state.pendingAuthContext = null;
 
-        if (currentTaskId && currentEditorCode.trim()) {
-            await saveWorkspace(currentEditorCode, { quiet: true });
-        } else if (currentTaskId) {
-            await loadTask(currentTaskId);
+        if (resumeContext.taskId && resumeContext.editorCode.trim()) {
+            await loadTask(resumeContext.taskId);
+            await saveWorkspace(resumeContext.editorCode, { quiet: true });
+        } else if (resumeContext.taskId) {
+            await loadTask(resumeContext.taskId);
         } else if (state.auth.current_task_id) {
             await loadTask(state.auth.current_task_id);
+        } else {
+            renderWorkspaceState();
         }
 
         showToast(
@@ -826,16 +1012,8 @@ async function handleAuthSubmit(event) {
 async function logout() {
     try {
         await apiFetch("/api/auth/logout", { method: "POST" });
-        state.auth = {
-            authenticated: false,
-            user: null,
-            current_task_id: null,
-        };
-        renderAuthControls();
-        await loadProgress();
-        if (state.currentTask) {
-            updateSaveStatus("Signed out | local editing only", "warning");
-        }
+        ui.progressModal.classList.remove("show");
+        applySignedOutState();
         showToast("Signed out.", "success");
     } catch (error) {
         showToast(error.message || "Logout failed.", "error");
@@ -942,14 +1120,25 @@ function initEditor() {
 
 async function bootstrap() {
     await loadSession();
-    await Promise.all([loadTasks(), loadProgress()]);
+    if (!state.auth.authenticated) {
+        applySignedOutState();
+        return;
+    }
+
+    const loaded = await loadProtectedData();
+    if (!loaded) {
+        return;
+    }
 
     if (state.auth.authenticated && state.auth.current_task_id) {
         const taskExists = state.tasks.some((task) => task.id === state.auth.current_task_id);
         if (taskExists) {
             await loadTask(state.auth.current_task_id);
+            return;
         }
     }
+
+    renderWorkspaceState();
 }
 
 bindStaticEvents();

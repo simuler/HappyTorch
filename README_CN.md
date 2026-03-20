@@ -2,7 +2,7 @@
 
 **PyTorch 编程练习平台 — 涵盖 LLM、Diffusion、PEFT、RLHF 等方向**
 
-*类似 LeetCode，但专注于张量运算。本地部署，支持 Jupyter 和 Web 两种界面，即时自动评测，无需 GPU。*
+*类似 LeetCode，但专注于张量运算。自托管，支持服务器 Web 部署，并保留本地 Notebook 练习方式。即时自动评测，无需 GPU。*
 
 [English README](README.md)
 
@@ -16,7 +16,6 @@
 
 > **动态**
 > - 2026-03-16：感谢 [damaoooo](https://github.com/damaoooo) 报告 Notebook 匹配 Bug（attention 与 multihead_attention 冲突）。已将脆弱的后缀匹配替换为显式名称映射，彻底解决此类问题。
-> - 2026-03-13：感谢 [wavetao2010](https://github.com/wavetao2010) 贡献 Docker 镜像支持，支持 Web/Jupyter 双模式及预构建镜像。
 > - 2026-03-12：Web 界面侧边栏新增题目分类展示（基础层、注意力机制、RLHF 等），支持折叠/展开，方便按专题刷题。
 > - 2026-03-10：感谢 [SongHuang1](https://github.com/SongHuang1) 贡献 MLP XOR 训练题目（纯 NumPy 手写前向+反向传播）。修复 Web 界面问题：class 类题目（LoRA、SwiGLU 等）现已正常工作，执行环境添加 `nn`/`F`/`numpy`/`math` 支持，修复 Windows 上 OpenMP 冲突导致的崩溃，修复 MHA 题解查找，前端增加 60 秒请求超时保护。
 > - 2026-03-09：感谢 [chaoyitud](https://github.com/chaoyitud) 新增 ML 与 RLHF 练习题目，感谢 [fiberproduct](https://github.com/fiberproduct) 修复 `torch_judge/tasks/rope.py`。欢迎大家贡献更多题目！
@@ -47,6 +46,8 @@
 
 ## 快速开始
 
+### 服务器 Web 部署
+
 ```bash
 # 1. 创建并激活环境
 conda create -n torchcode python=3.11 -y
@@ -54,38 +55,38 @@ conda activate torchcode
 
 # 2. 安装依赖
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install jupyterlab numpy
+pip install numpy jupyterlab
+pip install -r web/requirements.txt
 pip install -e .
 
-# 3. 准备练习 Notebook
+# 3. 准备题目 Notebook 与静态资源
 python prepare_notebooks.py
 
-# 4a. 启动 Web 模式（推荐）
-pip install fastapi uvicorn python-multipart
-python start_web.py
-# 浏览器打开 http://localhost:8000
+# 4. 配置服务器运行参数
+export HOST=0.0.0.0
+export PORT=8000
+export HAPPYTORCH_DB_PATH=/srv/happytorch/data/happytorch.db
 
-# 4b. 或启动 Jupyter 模式
+# 5. 启动 Web 服务
+python start_web.py
+```
+
+浏览器访问 `http://<服务器IP>:8000`，或者放到 Nginx / Caddy 后面，通过你的域名对外提供服务。
+
+### 部署说明
+
+- 持久化保存 `HAPPYTORCH_DB_PATH` 所在目录，确保账号、草稿、做题进度和上次打开题目在服务重启后仍然存在。
+- 如果通过 HTTPS 对外提供服务，设置 `SESSION_COOKIE_SECURE=true`，避免登录 Cookie 经由非加密链路发送。
+- 如果你希望 `start_web.py` 直接打印公网地址，可设置 `PUBLIC_ORIGIN=https://你的域名`。
+- 用户登录后会自动恢复上次打开的题目。
+- 未登录访客可以看到登录入口，但必须先注册或登录后才能打开题目、查看题解、保存草稿或提交代码。
+
+### 可选：本地 Notebook 模式
+
+```bash
 python start_jupyter.py
 # 浏览器打开 http://localhost:8888
 ```
-
-### Docker 启动
-
-```bash
-# Web 模式（默认，推荐）
-make run                # 构建并启动 → http://localhost:8000
-make stop               # 停止容器
-
-# Jupyter 模式
-make jupyter            # 构建并启动 → http://localhost:8888
-
-# 或直接使用预构建镜像（无需本地构建）
-docker compose up -d                        # Web 界面 → http://localhost:8000
-MODE=jupyter docker compose up -d           # Jupyter → http://localhost:8888
-```
-
-做题进度（`data/progress.json`）通过 Docker volume 持久化保存。
 
 ---
 
@@ -101,8 +102,27 @@ MODE=jupyter docker compose up -d           # Jupyter → http://localhost:8888
 - **暗色主题** — 现代化护眼界面
 
 ```bash
-pip install fastapi uvicorn python-multipart
-python start_web.py
+pip install -r web/requirements.txt
+HOST=0.0.0.0 PORT=8000 python start_web.py
+# 或：make web HOST=0.0.0.0 PORT=8000 DB_PATH=/srv/happytorch/data/happytorch.db
+#
+# 浏览器打开 http://<服务器IP>:8000
+```
+
+Web 端现在要求账号登录后才能开始刷题、查看题解、保存草稿和提交评测。
+
+### Make 快捷命令
+
+```bash
+make prepare
+make web HOST=0.0.0.0 PORT=8000 DB_PATH=/srv/happytorch/data/happytorch.db
+make jupyter
+```
+
+### 本地 Web 调试
+
+```bash
+HOST=127.0.0.1 PORT=8000 python start_web.py
 # 浏览器打开 http://localhost:8000
 ```
 
@@ -295,7 +315,6 @@ HappyTorch 基于 <a href="https://github.com/duoan/TorchCode">TorchCode</a>（1
 - [fiberproduct](https://github.com/fiberproduct) — RoPE 题目修复
 - [Rivflyyy](https://github.com/Rivflyyy) — [happytorch-plugin](https://github.com/Rivflyyy/happytorch-plugin) 插件
 - [SongHuang1](https://github.com/SongHuang1) — MLP XOR 训练题目
-- [wavetao2010](https://github.com/wavetao2010) — Docker 镜像支持
 - [damaoooo](https://github.com/damaoooo) — Notebook 匹配 Bug 修复
 
 ## 许可证

@@ -26,8 +26,8 @@
 
         <div class="header-actions">
             <div class="guest-pill" id="guestNotice">
-                <i class="ri-save-line"></i>
-                <span>Sign in to autosave drafts and progress</span>
+                <i class="ri-door-lock-box-line"></i>
+                <span>Account required before you can open problems</span>
             </div>
 
             <button class="ghost-btn" id="progressBtn" type="button">
@@ -41,8 +41,8 @@
             </div>
 
             <button class="primary-btn" id="randomBtn" type="button">
-                <i class="ri-shuffle-line"></i>
-                <span>Random</span>
+                <i class="ri-login-box-line"></i>
+                <span>Sign In to Start</span>
             </button>
 
             <div id="authControls" class="auth-controls"></div>
@@ -65,15 +65,17 @@
 
         <main class="workspace-shell">
             <div class="empty-state" id="emptyState">
-                <i class="ri-layout-masonry-line"></i>
-                <h2>Select a task</h2>
-                <p>The workspace opens from left to right as: contents, description, code, and solution.</p>
+                <i class="ri-door-lock-box-line"></i>
+                <div class="empty-state-copy">
+                    <h2>Register or sign in to start practicing</h2>
+                    <p>This server only exposes problems, solutions, drafts, and submissions to authenticated users.</p>
+                </div>
             </div>
 
             <div class="problem-view hidden" id="problemView">
                 <div class="auth-banner hidden" id="authBanner">
                     <div>
-                        <strong>Cloud-ready suggestion:</strong> create an account before you start so drafts, solved status, and your last opened problem are restored automatically.
+                        <strong>Account required:</strong> sign in before you start so drafts, solved status, and your last opened problem stay tied to your account.
                     </div>
                     <button class="ghost-btn" id="authBannerBtn" type="button">
                         <i class="ri-user-add-line"></i>

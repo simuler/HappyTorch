@@ -89,17 +89,6 @@ _TASK_NOTEBOOK_ALIASES = {
     "mha": "multihead_attention",
 }
 
-_EMPTY_TASK_STATE = {
-    "status": "todo",
-    "attempts": 0,
-    "best_time": None,
-    "solved_at": None,
-    "draft_code": None,
-    "draft_updated_at": None,
-    "last_opened_at": None,
-}
-
-
 def _build_notebook_map(directory: str, suffix: str = "") -> dict[str, Path]:
     """Build a map from notebook name without prefix/suffix to file path."""
     base_dir = Path(__file__).parent.parent / directory
@@ -415,11 +404,16 @@ async def get_optional_user(
 
 async def get_required_user(
     user: dict[str, Any] | None = Depends(get_optional_user),
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> dict[str, Any]:
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Please sign in to use this feature.",
+            detail=(
+                "Session expired. Please sign in again."
+                if session_token
+                else "Please sign in to use this feature."
+            ),
         )
     return user
 
@@ -444,7 +438,11 @@ async def auth_me(user: dict[str, Any] | None = Depends(get_optional_user)) -> d
 
 
 @app.post("/api/auth/register")
-async def register(payload: AuthRequest, response: Response) -> dict[str, Any]:
+async def register(
+    payload: AuthRequest,
+    response: Response,
+    session_token: str | None = Depends(get_session_token),
+) -> dict[str, Any]:
     try:
         user = create_user(payload.username, payload.password)
     except ValueError as exc:
@@ -454,13 +452,18 @@ async def register(payload: AuthRequest, response: Response) -> dict[str, Any]:
         )
         raise HTTPException(status_code=status_code, detail=message) from exc
 
+    delete_session(session_token)
     token = create_session(user["id"])
     _set_session_cookie(response, token)
     return _build_auth_payload(user)
 
 
 @app.post("/api/auth/login")
-async def login(payload: AuthRequest, response: Response) -> dict[str, Any]:
+async def login(
+    payload: AuthRequest,
+    response: Response,
+    session_token: str | None = Depends(get_session_token),
+) -> dict[str, Any]:
     user = authenticate_user(payload.username, payload.password)
     if not user:
         raise HTTPException(
@@ -468,6 +471,7 @@ async def login(payload: AuthRequest, response: Response) -> dict[str, Any]:
             detail="Invalid username or password.",
         )
 
+    delete_session(session_token)
     token = create_session(user["id"])
     _set_session_cookie(response, token)
     return _build_auth_payload(user)
@@ -484,7 +488,7 @@ async def logout(
 
 
 @app.get("/api/tasks")
-async def get_tasks() -> dict[str, list[dict[str, Any]]]:
+async def get_tasks(_: dict[str, Any] = Depends(get_required_user)) -> dict[str, list[dict[str, Any]]]:
     tasks: list[dict[str, Any]] = []
     for task_id, task in list_tasks():
         tasks.append(
@@ -502,17 +506,14 @@ async def get_tasks() -> dict[str, list[dict[str, Any]]]:
 @app.get("/api/tasks/{task_id}")
 async def get_task_detail(
     task_id: str,
-    user: dict[str, Any] | None = Depends(get_optional_user),
+    user: dict[str, Any] = Depends(get_required_user),
 ) -> dict[str, Any]:
     task = get_task(task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
 
-    if user:
-        touch_task(user["id"], task_id)
-        task_state = get_task_state(user["id"], task_id)
-    else:
-        task_state = dict(_EMPTY_TASK_STATE)
+    touch_task(user["id"], task_id)
+    task_state = get_task_state(user["id"], task_id)
 
     template, signature, example = _get_template_code(task_id)
     return {
@@ -549,7 +550,10 @@ async def save_workspace(
 
 
 @app.get("/api/tasks/{task_id}/solution")
-async def get_task_solution(task_id: str) -> dict[str, str]:
+async def get_task_solution(
+    task_id: str,
+    _: dict[str, Any] = Depends(get_required_user),
+) -> dict[str, str]:
     task = get_task(task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
@@ -570,12 +574,12 @@ async def get_task_solution(task_id: str) -> dict[str, str]:
 
 @app.get("/api/random")
 async def get_random_task(
-    user: dict[str, Any] | None = Depends(get_optional_user),
+    user: dict[str, Any] = Depends(get_required_user),
 ) -> dict[str, Any]:
     import random
 
     tasks = list_tasks()
-    progress_map = get_progress_map(user["id"]) if user else {}
+    progress_map = get_progress_map(user["id"])
     unsolved = [
         (task_id, task)
         for task_id, task in tasks
@@ -584,8 +588,7 @@ async def get_random_task(
     pool = unsolved or tasks
     task_id, task = random.choice(pool)
 
-    if user:
-        set_current_task(user["id"], task_id)
+    set_current_task(user["id"], task_id)
 
     return {
         "id": task_id,
@@ -597,9 +600,9 @@ async def get_random_task(
 
 @app.get("/api/progress")
 async def get_progress(
-    user: dict[str, Any] | None = Depends(get_optional_user),
+    user: dict[str, Any] = Depends(get_required_user),
 ) -> dict[str, Any]:
-    progress_map = get_progress_map(user["id"]) if user else {}
+    progress_map = get_progress_map(user["id"])
     tasks = list_tasks()
 
     task_progress: list[dict[str, Any]] = []
@@ -621,8 +624,8 @@ async def get_progress(
 
     solved = sum(1 for item in task_progress if item["status"] == "solved")
     return {
-        "authenticated": bool(user),
-        "current_task_id": user.get("current_task_id") if user else None,
+        "authenticated": True,
+        "current_task_id": user.get("current_task_id"),
         "solved": solved,
         "total": len(tasks),
         "tasks": task_progress,
@@ -632,7 +635,7 @@ async def get_progress(
 @app.post("/api/submit", response_model=SubmitResponse)
 async def submit_code(
     request: SubmitRequest,
-    user: dict[str, Any] | None = Depends(get_optional_user),
+    user: dict[str, Any] = Depends(get_required_user),
 ) -> SubmitResponse:
     task = get_task(request.task_id)
     if not task:
@@ -640,14 +643,13 @@ async def submit_code(
 
     passed, total, total_time, results, output = _run_tests(request.task_id, request.code)
 
-    if user:
-        record_submission(
-            user["id"],
-            request.task_id,
-            request.code,
-            solved=(passed == total),
-            total_time=total_time,
-        )
+    record_submission(
+        user["id"],
+        request.task_id,
+        request.code,
+        solved=(passed == total),
+        total_time=total_time,
+    )
 
     return SubmitResponse(
         success=(passed == total),
@@ -656,7 +658,7 @@ async def submit_code(
         total_time=total_time,
         results=results,
         output=output,
-        persisted=bool(user),
+        persisted=True,
     )
 
 

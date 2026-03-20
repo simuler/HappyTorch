@@ -2,7 +2,7 @@
 
 **A PyTorch coding practice platform — covering LLM, Diffusion, PEFT, RLHF, and more**
 
-*Like LeetCode, but for tensors. Self-hosted. Supports both Jupyter and Web interfaces. Instant auto-grading feedback. No GPU required.*
+*Like LeetCode, but for tensors. Self-hosted. Server-ready web interface with optional local notebooks. Instant auto-grading feedback. No GPU required.*
 
 [中文版 README](README_CN.md)
 
@@ -16,7 +16,6 @@
 
 > **News**
 > - 2026-03-16: Thanks to [damaoooo](https://github.com/damaoooo) for reporting the notebook matching bug (attention vs multihead_attention). Replaced fragile suffix-based matching with an explicit name mapping for long-term reliability.
-> - 2026-03-13: Thanks to [wavetao2010](https://github.com/wavetao2010) for adding Docker image support with dual-mode (Web/Jupyter) and pre-built images.
 > - 2026-03-12: Web UI now groups problems by category (Fundamentals, Attention, RLHF, etc.) with collapsible sections in the sidebar for easier topic-based practice.
 > - 2026-03-10: Thanks to [SongHuang1](https://github.com/SongHuang1) for contributing the MLP XOR training problem (pure NumPy, manual forward + backward). Fixed Web UI issues: class-based tasks (LoRA, SwiGLU, etc.) now work correctly, added `nn`/`F`/`numpy`/`math` to execution namespace, fixed OpenMP crash on Windows, added MHA solution lookup, added 60s request timeout.
 > - 2026-03-09: Thanks to [chaoyitud](https://github.com/chaoyitud) for adding ML and RLHF practice problems. Thanks to [fiberproduct](https://github.com/fiberproduct) for fixing `torch_judge/tasks/rope.py`. Welcome everybody to contribute more problems!
@@ -47,6 +46,8 @@ If you're learning deep learning or preparing for ML interviews, you might have 
 
 ## Quick Start
 
+### Server Web Deployment
+
 ```bash
 # 1. Create and activate environment
 conda create -n torchcode python=3.11 -y
@@ -54,45 +55,38 @@ conda activate torchcode
 
 # 2. Install dependencies
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install jupyterlab numpy
+pip install numpy jupyterlab
+pip install -r web/requirements.txt
 pip install -e .
 
-# 3. Prepare notebooks
+# 3. Prepare notebooks and workspace assets
 python prepare_notebooks.py
 
-# 4a. Launch Web Mode (recommended)
-pip install fastapi uvicorn python-multipart
-python start_web.py
-# Open http://localhost:8000
+# 4. Configure runtime for your server
+export HOST=0.0.0.0
+export PORT=8000
+export HAPPYTORCH_DB_PATH=/srv/happytorch/data/happytorch.db
 
-# 4b. Or launch Jupyter Mode
+# 5. Start the web service
+python start_web.py
+```
+
+Open `http://<server-ip>:8000` directly, or place the app behind Nginx/Caddy and expose it via your domain.
+
+### Deployment Notes
+
+- Persist the directory that contains `HAPPYTORCH_DB_PATH` so accounts, saved drafts, progress, and last-opened task state survive restarts.
+- Set `SESSION_COOKIE_SECURE=true` when serving HappyTorch behind HTTPS so auth cookies are only sent over secure connections.
+- Set `PUBLIC_ORIGIN=https://your-domain` if you want `start_web.py` to print your public URL instead of a generic server hint.
+- Registered users resume from their last opened problem automatically after signing in.
+- Unauthenticated visitors can reach the landing UI, but they must register or sign in before opening problems or submitting code.
+
+### Optional Local Notebook Mode
+
+```bash
 python start_jupyter.py
 # Open http://localhost:8888
 ```
-
-### Docker
-
-```bash
-# Web Mode (default, recommended)
-make run                # build & start → http://localhost:8000
-make stop               # stop container
-
-# Jupyter Mode
-make jupyter            # build & start → http://localhost:8888
-
-# Or use the pre-built image directly (no build needed)
-docker compose up -d                        # Web UI → http://localhost:8000
-MODE=jupyter docker compose up -d           # Jupyter → http://localhost:8888
-```
-
-Account data, saved drafts, and per-user progress are persisted in `data/happytorch.db` via the Docker volume.
-
-### Cloud Deployment Notes
-
-- Mount `/app/data` to persistent storage so user accounts, saved code drafts, and progress survive container restarts.
-- Set `HAPPYTORCH_DB_PATH=/app/data/happytorch.db` if you want an explicit database location.
-- When deploying behind HTTPS, set `SESSION_COOKIE_SECURE=true` so login cookies are only sent over secure connections.
-- Users now resume from their last opened problem automatically after signing in, and code drafts are autosaved per account in Web Mode.
 
 ---
 
@@ -108,8 +102,27 @@ A LeetCode-like practice interface with:
 - **Dark Theme** — Modern, eye-friendly interface
 
 ```bash
-pip install fastapi uvicorn python-multipart
-python start_web.py
+pip install -r web/requirements.txt
+HOST=0.0.0.0 PORT=8000 python start_web.py
+# Or: make web HOST=0.0.0.0 PORT=8000 DB_PATH=/srv/happytorch/data/happytorch.db
+#
+# Open http://<server-ip>:8000
+```
+
+The web app is account-gated: users must register or sign in before they can browse problems, save drafts, view solutions, or submit code.
+
+### Make Targets
+
+```bash
+make prepare
+make web HOST=0.0.0.0 PORT=8000 DB_PATH=/srv/happytorch/data/happytorch.db
+make jupyter
+```
+
+### Local Web Mode
+
+```bash
+HOST=127.0.0.1 PORT=8000 python start_web.py
 # Open http://localhost:8000
 ```
 
@@ -302,7 +315,6 @@ Community contributions:
 - [fiberproduct](https://github.com/fiberproduct) — RoPE task fix
 - [Rivflyyy](https://github.com/Rivflyyy) — [happytorch-plugin](https://github.com/Rivflyyy/happytorch-plugin)
 - [SongHuang1](https://github.com/SongHuang1) — MLP XOR training problem
-- [wavetao2010](https://github.com/wavetao2010) — Docker image support
 - [damaoooo](https://github.com/damaoooo) — Notebook matching bug fix
 
 ## License

@@ -134,10 +134,10 @@ def create_user(username: str, password: str) -> dict[str, Any]:
         try:
             cursor = conn.execute(
                 """
-                INSERT INTO users (username, password_hash, created_at)
-                VALUES (?, ?, ?)
+                INSERT INTO users (username, password_hash, created_at, last_login_at)
+                VALUES (?, ?, ?, ?)
                 """,
-                (clean_username, _hash_password(password), created_at),
+                (clean_username, _hash_password(password), created_at, created_at),
             )
         except sqlite3.IntegrityError as exc:
             raise ValueError("Username is already taken.") from exc
@@ -156,20 +156,23 @@ def create_user(username: str, password: str) -> dict[str, Any]:
         "id": user_id,
         "username": clean_username,
         "created_at": created_at,
-        "last_login_at": None,
+        "last_login_at": created_at,
         "current_task_id": None,
     }
 
 
 def authenticate_user(username: str, password: str) -> dict[str, Any] | None:
     clean_username = username.strip()
+    if not clean_username or not password:
+        return None
+
     with _connect() as conn:
         row = conn.execute(
             """
             SELECT u.id, u.username, u.password_hash, u.created_at, u.last_login_at, p.current_task_id
             FROM users u
             LEFT JOIN user_preferences p ON p.user_id = u.id
-            WHERE u.username = ?
+            WHERE u.username = ? COLLATE NOCASE
             """,
             (clean_username,),
         ).fetchone()

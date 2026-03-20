@@ -245,6 +245,32 @@ button:disabled {
     padding: 10px;
 }
 
+.task-gate-card {
+    background: linear-gradient(180deg, rgba(83, 183, 255, 0.08), rgba(255, 255, 255, 0.02));
+    border: 1px solid rgba(83, 183, 255, 0.2);
+    border-radius: 16px;
+    margin: 8px;
+    padding: 18px;
+}
+
+.task-gate-card h3 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+}
+
+.task-gate-card p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.task-gate-actions,
+.empty-state-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+}
+
 .category-group {
     margin-bottom: 8px;
 }
@@ -396,6 +422,10 @@ button:disabled {
     justify-content: center;
     padding: 32px;
     text-align: center;
+}
+
+.empty-state-copy {
+    max-width: 560px;
 }
 
 .empty-state i {

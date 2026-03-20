@@ -1,30 +1,15 @@
-COMPOSE := $(shell command -v podman >/dev/null 2>&1 && echo "podman compose" || echo "docker compose")
+HOST ?= 0.0.0.0
+PORT ?= 8000
+DB_PATH ?= data/happytorch.db
+SESSION_COOKIE_SECURE ?= false
 
-IMAGE := ghcr.io/rivflyyy/happytorch
+.PHONY: prepare web jupyter
 
-.PHONY: run stop clean jupyter push
+prepare:
+	python prepare_notebooks.py
 
-run:
-	$(COMPOSE) up --build -d
-	@echo ""
-	@echo "HappyTorch is running!"
-	@echo "   Open http://localhost:8000"
-	@echo ""
+web:
+	HOST=$(HOST) PORT=$(PORT) HAPPYTORCH_DB_PATH=$(DB_PATH) SESSION_COOKIE_SECURE=$(SESSION_COOKIE_SECURE) python start_web.py
 
 jupyter:
-	MODE=jupyter PORT=8888 $(COMPOSE) -f docker-compose.yml -f docker-compose.jupyter.yml up --build -d
-	@echo ""
-	@echo "HappyTorch JupyterLab is running!"
-	@echo "   Open http://localhost:8888"
-	@echo ""
-
-stop:
-	$(COMPOSE) down
-
-clean:
-	$(COMPOSE) down -v
-	rm -f data/progress.json
-
-push:
-	docker build -t $(IMAGE):latest .
-	docker push $(IMAGE):latest
+	python start_jupyter.py
