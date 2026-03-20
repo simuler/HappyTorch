@@ -7,6 +7,7 @@ services:
     environment:
       - MODE=web
       - HOST=0.0.0.0
+      - HAPPYTORCH_DB_PATH=/app/data/happytorch.db
     volumes:
       - ./data:/app/data
     restart: unless-stopped

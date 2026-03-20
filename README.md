@@ -85,7 +85,14 @@ docker compose up -d                        # Web UI → http://localhost:8000
 MODE=jupyter docker compose up -d           # Jupyter → http://localhost:8888
 ```
 
-Progress data (`data/progress.json`) is persisted via Docker volume.
+Account data, saved drafts, and per-user progress are persisted in `data/happytorch.db` via the Docker volume.
+
+### Cloud Deployment Notes
+
+- Mount `/app/data` to persistent storage so user accounts, saved code drafts, and progress survive container restarts.
+- Set `HAPPYTORCH_DB_PATH=/app/data/happytorch.db` if you want an explicit database location.
+- When deploying behind HTTPS, set `SESSION_COOKIE_SECURE=true` so login cookies are only sent over secure connections.
+- Users now resume from their last opened problem automatically after signing in, and code drafts are autosaved per account in Web Mode.
 
 ---
 
